@@ -38,6 +38,6 @@ export async function getAccount(
   try {
     return (await db.get<Account>([`accounts`, email])).value;
   } catch (e) {
-    throw new Error(`db get failure in fn isNewAccount: ${JSON.stringify(e)}`);
+    throw new Error(`db get failure in fn getAccount: ${JSON.stringify(e)}`);
   }
 }

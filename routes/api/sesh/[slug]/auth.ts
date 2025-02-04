@@ -32,31 +32,53 @@ export const handler = async (
     return new Response("error", { status: 500 });
   }
 
-  if (!/^[a-zA-Z0-9]{9}/.test(code)) {
-    console.error(`bad code: ${code}`);
-    return new Response("bad", { status: 400 });
-  }
-
   if (action === "start") {
-    const sesh = await startSesh(email, code);
-    if (sesh) {
-      const headers = new Headers();
-      headers.set("Location", "sloth-life.deno.dev");
-      headers.set(
-        "Set-Cookie",
-        `session-token=${sesh.sessionToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
-      );
-      headers.set(
-        "Set-Cookie",
-        `refresh-token=${sesh.refreshToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
-      );
-      return new Response("redirect", { status: 302, headers });
+    if (!/^[a-zA-Z0-9]{9}/.test(code)) {
+      console.error(`bad code: ${code}`);
+      return new Response("bad", { status: 400 });
     }
+
+    const sesh = await startSesh(email, code);
+    if (sesh) return redirectAndSetSeshCookies(sesh);
     return new Response("error", { status: 500 });
   }
 
-  // todo
-  // if (action === "re") {}
+  if (action === "verify") {
+    const sesh = req.headers.get("x-sloth-session-token");
+    const refresh = req.headers.get("x-sloth-refresh-token");
+
+    const db = await Deno.openKv();
+    const account = await getAccount(db, email) ?? {} as Account;
+    if (!sesh) {
+      console.error(`error: missing session token header`);
+      return new Response("unauthorised", { status: 401 });
+    }
+
+    const result = await verifySesh(sesh, account);
+    if (result !== 0 && result < 3) {
+      console.error(`error: bad session token ${sesh}`);
+      return redirectAndDeleteSesh();
+    }
+
+    // get a new sesh
+    if (result === 3) {
+      if (!refresh) {
+        console.error(`error: missing refresh token header`);
+        return redirectAndDeleteSesh();
+      }
+
+      const result = await verifySesh(refresh, account);
+      if (result !== 0) {
+        return redirectAndDeleteSesh();
+      }
+
+      const newSesh = await startSesh(email);
+      if (!newSesh) {
+        return new Response("failed to get a new sesh", { status: 500 });
+      }
+      return redirectAndSetSeshCookies(newSesh);
+    }
+  }
 
   console.error(`bad request data, action: ${action}`);
   return new Response("bad", { status: 400 });
@@ -111,22 +133,24 @@ async function requestSesh(email: string): Promise<boolean> {
 
 async function startSesh(
   email: string,
-  code: string,
+  code?: string,
 ): Promise<Session | null> {
   const db = await Deno.openKv();
   const key = [`accounts`, email];
   const value = (await db.get<Account>(key)).value;
+
   if (
-    !value?.loginToken || (await verifyJwt(value.loginToken))?.code !== code
+    !!code &&
+    (!value?.loginToken || (await verifyJwt(value.loginToken))?.code !== code)
   ) {
     return null;
   }
 
   // store session
-  const session = getRandomString(62, "_#%$?");
-  const refresh = getRandomString(62, "_#%$?");
-  const sessionToken = await createJwt({ session }, "1 hr");
-  const refreshToken = await createJwt({ refresh }, "3 hr");
+  const sessionToken = getRandomString(15, "_#%$?");
+  const refreshToken = getRandomString(15, "_#%$?");
+  const sessionJwt = await createJwt({ sessionToken }, "1 hr");
+  const refreshJwt = await createJwt({ refreshToken }, "3 hr");
   try {
     await db.set(key, { ...value, sessionToken, refreshToken });
   } catch (e) {
@@ -139,7 +163,7 @@ async function startSesh(
     return null;
   }
 
-  return { sessionToken, refreshToken };
+  return { sessionToken: sessionJwt, refreshToken: refreshJwt };
 }
 
 function getRandomString(len: number = 9, extraChars: string = ""): string {
@@ -150,4 +174,63 @@ function getRandomString(len: number = 9, extraChars: string = ""): string {
     str += chs.charAt(Math.floor(Math.random() * chs.length));
   }
   return str;
+}
+
+async function verifySesh(
+  token: string,
+  account: Account,
+): Promise<number> {
+  const payload = await verifyJwt(token);
+  if (!payload || (!payload.sessionToken && !payload.refreshToken)) {
+    console.error(`bad token`);
+    return 1;
+  }
+
+  if (!!payload.sessionToken && payload.sessionToken !== account.sessionToken) {
+    console.error(`bad session token payload`);
+    return 2;
+  }
+  if (!!payload.refreshToken && payload.refeshToken !== account.refreshToken) {
+    console.error(`bad refresh token payload`);
+    return 2;
+  }
+
+  if (!payload.exp || Date.now() >= payload.exp) {
+    console.error(`token expired`);
+    return 3;
+  }
+  return 0;
+}
+
+function redirectAndSetSeshCookies(
+  sesh: Session,
+  location: string = "sloth-life.deno.dev",
+): Response {
+  const headers = new Headers();
+  headers.set("Location", location);
+  headers.set(
+    "Set-Cookie",
+    `x-sloth-session-token=${sesh.sessionToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
+  );
+  headers.set(
+    "Set-Cookie",
+    `x-sloth-refresh-token=${sesh.refreshToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
+  );
+  return new Response("redirect to home", { status: 302, headers });
+}
+
+function redirectAndDeleteSesh(
+  location = "sloth-life.deno.dev/login",
+): Response {
+  const headers = new Headers();
+  headers.set("Location", location);
+  headers.set(
+    "Set-Cookie",
+    "x-sloth-session-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
+  );
+  headers.set(
+    "Set-Cookie",
+    "x-sloth-refesh-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
+  );
+  return new Response("redirect to login", { status: 302, headers });
 }
