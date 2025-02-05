@@ -111,8 +111,13 @@ async function requestSesh(email: string): Promise<boolean> {
       account.id = await getAccId(db);
       account.email = email;
       account.createdAt = Date.now();
+
+      const accSecondaryKey = ["accountsById", account.id];
+
       await db.atomic()
         .set(accKey, account)
+        // Set the secondary key's value to be the primary key
+        .set(accSecondaryKey, email)
         .set(metaKey, {
           ...metaData,
           latestAccId: (metaData.latestAccId ?? -1) + 1,
