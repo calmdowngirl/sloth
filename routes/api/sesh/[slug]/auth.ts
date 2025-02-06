@@ -9,7 +9,7 @@ type Session = {
   refreshToken: string;
 };
 
-const { EVENT_TYPE_0 } = Deno.env.toObject();
+const { EVENT_TYPE_0, DOMAIN } = Deno.env.toObject();
 
 export const handler = async (
   req: Request,
@@ -19,6 +19,7 @@ export const handler = async (
   const action = ctx.params.slug;
   const email = data.get("email")?.toString() ?? "nothing";
   const code = data.get("code")?.toString() ?? "nothing";
+  const isLocalhost = req.url.startsWith("http://localhost");
 
   if (!/\S+@\S+\.\S+/.test(email)) {
     console.error(`bad email: ${email}`);
@@ -27,7 +28,10 @@ export const handler = async (
 
   if (action === "req") {
     if (await requestSesh(email)) {
-      return new Response("ok", { status: 200 });
+      return redirectToLocation("/login", [{
+        k: "email",
+        v: email,
+      }]);
     }
     return new Response("error", { status: 500 });
   }
@@ -39,7 +43,7 @@ export const handler = async (
     }
 
     const sesh = await startSesh(email, code);
-    if (sesh) return redirectAndSetSeshCookies(sesh);
+    if (sesh) return redirectAndSetSeshCookies(sesh, isLocalhost);
     return new Response("error", { status: 500 });
   }
 
@@ -76,7 +80,7 @@ export const handler = async (
       if (!newSesh) {
         return new Response("failed to get a new sesh", { status: 500 });
       }
-      return redirectAndSetSeshCookies(newSesh);
+      return redirectAndSetSeshCookies(newSesh, isLocalhost);
     }
   }
 
@@ -200,7 +204,7 @@ async function verifySesh(
     return 2;
   }
 
-  if (!payload.exp || Date.now() >= payload.exp) {
+  if (!payload.exp || Date.now() / 1000 >= payload.exp) {
     console.error(`token expired`);
     return 3;
   }
@@ -209,23 +213,41 @@ async function verifySesh(
 
 function redirectAndSetSeshCookies(
   sesh: Session,
-  location: string = "sloth-life.deno.dev",
+  isLocalhost: boolean,
+  location: string = "/",
 ): Response {
+  const domain = isLocalhost ? "" : `${DOMAIN};`;
   const headers = new Headers();
   headers.set("Location", location);
   headers.set(
     "Set-Cookie",
-    `x-sloth-session-token=${sesh.sessionToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
+    `x-sloth-session-token=${sesh.sessionToken}; ${domain} Path=/; Max-Age=3600`,
   );
-  headers.set(
+  headers.append(
     "Set-Cookie",
-    `x-sloth-refresh-token=${sesh.refreshToken}; Domain=sloth-life.deno.dev; Path=/; Max-Age=3600`,
+    `x-sloth-refresh-token=${sesh.refreshToken}; ${domain} Path=/; Max-Age=3600`,
   );
+
   return new Response("redirect to home", { status: 302, headers });
 }
 
+export function redirectToLocation(
+  location = "/login",
+  queryParams: { k: string; v: string }[] = [],
+): Response {
+  const q = new URLSearchParams();
+  queryParams.forEach((p) => q.set(p.k, p.v));
+  const headers = new Headers();
+  headers.set(
+    "Location",
+    `${location}${queryParams.length ? "?" + q.toString() : ""}`,
+  );
+
+  return new Response("redirect", { status: 302, headers });
+}
+
 function redirectAndDeleteSesh(
-  location = "sloth-life.deno.dev/login",
+  location = "/login",
 ): Response {
   const headers = new Headers();
   headers.set("Location", location);
