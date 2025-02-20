@@ -1,8 +1,15 @@
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 import { FreshContext } from "$fresh/server.ts";
 import { createJwt, verifyJwt } from "/utils/jwt.ts";
-import { Account, getAccId, getAccount, MetaData } from "/utils/account.ts";
+import {
+  Account,
+  getAccId,
+  getAccountByEmail,
+  getAccountById,
+  MetaData,
+} from "/utils/account.ts";
 import { emailCode } from "/utils/email.ts";
+import { JWTPayload } from "npm:jose@5.9.6";
 
 type Session = {
   sessionToken: string;
@@ -21,7 +28,8 @@ export const handler = async (
   const code = data.get("code")?.toString() ?? "nothing";
   const isLocalhost = req.url.startsWith("http://localhost");
 
-  if (!/\S+@\S+\.\S+/.test(email)) {
+  const requiresEmail = action === "req" || action === "start";
+  if (requiresEmail && !/\S+@\S+\.\S+/.test(email)) {
     console.error(`bad email: ${email}`);
     return new Response("bad", { status: 400 });
   }
@@ -51,15 +59,16 @@ export const handler = async (
     const sesh = req.headers.get("x-sloth-session-token");
     const refresh = req.headers.get("x-sloth-refresh-token");
 
-    const db = await Deno.openKv();
-    const account = await getAccount(db, email) ?? {} as Account;
     if (!sesh) {
       console.error(`error: missing session token header`);
-      return new Response("unauthorised", { status: 401 });
+      return redirectAndDeleteSesh();
     }
 
-    const result = await verifySesh(sesh, account);
-    if (result !== 0 && result < 3) {
+    const { result, payload: _ } = await verifySesh(sesh);
+
+    if (result === 0) return new Response("ok", { status: 200 });
+
+    if (result < 3) {
       console.error(`error: bad session token ${sesh}`);
       return redirectAndDeleteSesh();
     }
@@ -71,16 +80,18 @@ export const handler = async (
         return redirectAndDeleteSesh();
       }
 
-      const result = await verifySesh(refresh, account);
+      const { result, payload } = await verifySesh(refresh);
       if (result !== 0) {
         return redirectAndDeleteSesh();
       }
 
-      const newSesh = await startSesh(email);
+      const newSesh = await startSesh(undefined, undefined, +payload!.id!);
       if (!newSesh) {
         return new Response("failed to get a new sesh", { status: 500 });
       }
-      return redirectAndSetSeshCookies(newSesh, isLocalhost);
+
+      // 200 ok
+      return setSeshCookies(newSesh, isLocalhost);
     }
   }
 
@@ -97,10 +108,10 @@ async function requestSesh(email: string): Promise<boolean> {
     const accKey = ["accounts", email];
     const metaKey = ["meta"];
 
-    const account = await getAccount(db, email) ?? {} as Account;
-    account.loginToken = loginToken;
-
+    const account = await getAccountByEmail(db, email) ?? {} as Account;
     const isAccountNew = !Object.entries(account).length;
+
+    account.loginToken = loginToken;
 
     // `null` versionstamps mean 'no value'
     await db.atomic().check({ key: metaKey, versionstamp: null }).set(
@@ -141,25 +152,41 @@ async function requestSesh(email: string): Promise<boolean> {
 }
 
 async function startSesh(
-  email: string,
+  email?: string,
   code?: string,
+  id?: number,
 ): Promise<Session | null> {
+  if (!email && id == null) return null;
+
   const db = await Deno.openKv();
-  const key = [`accounts`, email];
-  const value = (await db.get<Account>(key)).value;
+  let value;
+  if (!email) {
+    value = await getAccountById(db, id!);
+    email = value?.email;
+  } else {
+    value = await getAccountByEmail(db, email);
+    id = value?.id;
+  }
 
   if (
     !!code &&
-    (!value?.loginToken || (await verifyJwt(value.loginToken))?.code !== code)
+    (!value?.loginToken ||
+      (await verifyJwt(value.loginToken))?.code !== code)
   ) {
+    return null;
+  }
+
+  if (!value || !email || id == null) {
+    console.log(`not found: email or id`);
     return null;
   }
 
   // store session
   const sessionToken = getRandomString(15, "_#%$?");
   const refreshToken = getRandomString(15, "_#%$?");
-  const sessionJwt = await createJwt({ sessionToken }, "1 hr");
-  const refreshJwt = await createJwt({ refreshToken }, "3 hr");
+  const sessionJwt = await createJwt({ sessionToken, id }, "1 hr");
+  const refreshJwt = await createJwt({ refreshToken, id }, "3 hr");
+  const key = [`accounts`, email];
   try {
     await db.set(key, { ...value, sessionToken, refreshToken });
   } catch (e) {
@@ -185,30 +212,38 @@ function getRandomString(len: number = 9, extraChars: string = ""): string {
   return str;
 }
 
-async function verifySesh(
-  token: string,
-  account: Account,
-): Promise<number> {
+type VerifyJwtResult = {
+  result: number;
+  payload?: JWTPayload | null;
+};
+export async function verifySesh(token: string): Promise<VerifyJwtResult> {
   const payload = await verifyJwt(token);
-  if (!payload || (!payload.sessionToken && !payload.refreshToken)) {
+  if (
+    !payload || payload.id == null ||
+    (!payload.sessionToken && !payload.refreshToken)
+  ) {
     console.error(`bad token`);
-    return 1;
+    return { result: 1 };
   }
 
+  const db = await Deno.openKv();
+  const account = await getAccountById(db, +payload.id) ??
+    {} as Account;
+
   if (!!payload.sessionToken && payload.sessionToken !== account.sessionToken) {
-    console.error(`bad session token payload`);
-    return 2;
+    console.error(`bad session token payload`, account, payload);
+    return { result: 2 };
   }
   if (!!payload.refreshToken && payload.refeshToken !== account.refreshToken) {
     console.error(`bad refresh token payload`);
-    return 2;
+    return { result: 2 };
   }
 
   if (!payload.exp || Date.now() / 1000 >= payload.exp) {
     console.error(`token expired`);
-    return 3;
+    return { result: 3 };
   }
-  return 0;
+  return { result: 0, payload };
 }
 
 function redirectAndSetSeshCookies(
@@ -221,14 +256,35 @@ function redirectAndSetSeshCookies(
   headers.set("Location", location);
   headers.set(
     "Set-Cookie",
-    `x-sloth-session-token=${sesh.sessionToken}; ${domain} Path=/; Max-Age=3600`,
+    `x-sloth-session-token=${sesh.sessionToken}; ${domain} Path=/; Max-Age=3600; HttpOnly`,
   );
   headers.append(
     "Set-Cookie",
-    `x-sloth-refresh-token=${sesh.refreshToken}; ${domain} Path=/; Max-Age=3600`,
+    `x-sloth-refresh-token=${sesh.refreshToken}; ${domain} Path=/; Max-Age=${
+      3600 * 3
+    }; HttpOnly`,
   );
 
   return new Response("redirect to home", { status: 302, headers });
+}
+
+function setSeshCookies(
+  sesh: Session,
+  isLocalhost: boolean,
+): Response {
+  const domain = isLocalhost ? "" : `${DOMAIN};`;
+  const headers = new Headers();
+  headers.set(
+    "Set-Cookie",
+    `x-sloth-session-token=${sesh.sessionToken}; ${domain} Path=/; Max-Age=3600; HttpOnly`,
+  );
+  headers.append(
+    "Set-Cookie",
+    `x-sloth-refresh-token=${sesh.refreshToken}; ${domain} Path=/; Max-Age=${
+      3600 * 3
+    }; HttpOnly`,
+  );
+  return new Response("ok", { status: 200, headers });
 }
 
 export function redirectToLocation(
@@ -246,18 +302,18 @@ export function redirectToLocation(
   return new Response("redirect", { status: 302, headers });
 }
 
-function redirectAndDeleteSesh(
+export function redirectAndDeleteSesh(
   location = "/login",
 ): Response {
   const headers = new Headers();
   headers.set("Location", location);
   headers.set(
     "Set-Cookie",
-    "x-sloth-session-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
+    "x-sloth-session-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly",
   );
   headers.set(
     "Set-Cookie",
-    "x-sloth-refesh-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
+    "x-sloth-refesh-token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly",
   );
   return new Response("redirect to login", { status: 302, headers });
 }

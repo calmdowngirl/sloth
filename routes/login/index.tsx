@@ -1,4 +1,5 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
+import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import { redirectToLocation } from "/routes/api/sesh/[slug]/auth.ts";
 import { verifyJwt } from "/utils/jwt.ts";
 
@@ -8,8 +9,7 @@ type Data = {
 
 export const handler: Handlers<Data> = {
   async GET(req, ctx) {
-    const url = new URL(req.url);
-    const sesh = req.headers.get("cookie")?.split(";")?.[0]?.split("=")?.[1];
+    const sesh = getCookies(req.headers)["x-sloth-session-token"];
     if (sesh) {
       const pl = await verifyJwt(sesh);
       if (pl && pl.exp && Date.now() / 1000 < pl.exp) {
@@ -17,6 +17,8 @@ export const handler: Handlers<Data> = {
         return redirectToLocation("/");
       }
     }
+
+    const url = new URL(req.url);
     const email = url.searchParams.get("email") || "";
     return ctx.render({ email });
   },

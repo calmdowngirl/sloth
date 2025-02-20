@@ -31,13 +31,30 @@ export async function hasNoAccountsYet(db: Deno.Kv): Promise<boolean | never> {
   }
 }
 
-export async function getAccount(
+export async function getAccountByEmail(
   db: Deno.Kv,
   email: string,
 ): Promise<Account | null | never> {
   try {
     return (await db.get<Account>([`accounts`, email])).value;
   } catch (e) {
-    throw new Error(`db get failure in fn getAccount: ${JSON.stringify(e)}`);
+    throw new Error(
+      `db get failure in fn getAccountByEmail: ${JSON.stringify(e)}`,
+    );
+  }
+}
+
+export async function getAccountById(
+  db: Deno.Kv,
+  id: number,
+): Promise<Account | null | never> {
+  try {
+    const email = (await db.get<string>([`accountsById`, id])).value;
+    if (!email) return null;
+    return (await getAccountByEmail(db, email));
+  } catch (e) {
+    throw new Error(
+      `db get failure in fn getAccountById: ${JSON.stringify(e)}`,
+    );
   }
 }
