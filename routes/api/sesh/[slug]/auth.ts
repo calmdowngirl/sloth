@@ -9,6 +9,7 @@ import {
   MetaData,
 } from "/utils/account.ts";
 import { emailCode } from "/utils/email.ts";
+import { isLocalhost } from "/utils/helper.ts";
 import { JWTPayload } from "npm:jose@5.9.6";
 
 type Session = {
@@ -37,7 +38,6 @@ export const handler = async (
   const action = ctx.params.slug;
   const email = data.get("email")?.toString() ?? "nothing";
   const code = data.get("code")?.toString() ?? "nothing";
-  const isLocalhost = req.url.startsWith("http://localhost");
 
   const requiresEmail = action === "req" || action === "start";
   if (requiresEmail && !/\S+@\S+\.\S+/.test(email)) {
@@ -69,7 +69,7 @@ export const handler = async (
     }
 
     const sesh = await startSesh(email, code);
-    if (sesh) return redirectAndSetSeshCookies(sesh, isLocalhost);
+    if (sesh) return redirectAndSetSeshCookies(sesh, isLocalhost(req));
     return new Response("error", { status: 500 });
   }
 
@@ -109,7 +109,7 @@ export const handler = async (
       }
 
       // 200 ok
-      return setSeshCookies(newSesh, isLocalhost);
+      return setSeshCookies(newSesh, isLocalhost(req));
     }
   }
 
@@ -117,7 +117,7 @@ export const handler = async (
   return new Response("bad", { status: 400 });
 };
 
-async function requestSesh(email: string): Promise<boolean> {
+export async function requestSesh(email: string): Promise<boolean> {
   const code = getRandomString(9);
   const loginToken = await createJwt({ code }, "15 mins");
 
@@ -169,7 +169,7 @@ async function requestSesh(email: string): Promise<boolean> {
   return await emailCode(email, EVENT_TYPE_0, code);
 }
 
-async function startSesh(
+export async function startSesh(
   email?: string,
   code?: string,
   id?: number,
@@ -264,7 +264,7 @@ export async function verifySesh(token: string): Promise<VerifyJwtResult> {
   return { result: 0, payload };
 }
 
-function redirectAndSetSeshCookies(
+export function redirectAndSetSeshCookies(
   sesh: Session,
   isLocalhost: boolean,
   location: string = "/",
