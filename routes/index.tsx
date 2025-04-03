@@ -21,6 +21,7 @@ export const handler: Handlers<Data> = {
       };
       const url = new URL("./api/sesh/verify/auth", req.url);
       const result = await fetch(url, options);
+      console.log(`verify sesh result: `, result);
 
       if (result.redirected) {
         return redirectAndDeleteSesh();
@@ -30,7 +31,7 @@ export const handler: Handlers<Data> = {
         return ctx.render({ isAuthor: true });
       }
 
-      console.info(`invalid session`);
+      console.info(`invalid session`, req.url);
     }
     return ctx.render({ isAuthor: false });
   },
