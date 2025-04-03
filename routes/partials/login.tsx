@@ -2,13 +2,19 @@ import { Handlers, PageProps } from "$fresh/server.ts";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import { redirectToLocation } from "/routes/api/sesh/[slug]/auth.ts";
 import { verifyJwt } from "/utils/jwt.ts";
+import { Partial } from "$fresh/runtime.ts";
 
 type Data = {
   email: string;
 };
 
 export const handler: Handlers<Data> = {
-  async GET(req, ctx) {
+  GET(req, _ctx) {
+    console.info(`Invalid request`, req);
+    return redirectToLocation("/");
+  },
+
+  async POST(req, ctx) {
     const sesh = getCookies(req.headers)["x-sloth-session-token"];
     if (sesh) {
       const pl = await verifyJwt(sesh);
@@ -41,17 +47,19 @@ export default function LoginPage({ data }: PageProps<Data>) {
     };
 
   return (
-    <>
-      <form action={values.action} method={"POST"}>
+    <Partial name="action-login">
+      <form action={values.action} method="POST">
         {/* either email or code */}
         <input
           type="text"
           name={values.inputName}
           placeholder={values.placeholder}
+          defaultValue=""
+          required
         />
         {email && <input type="hidden" name="email" value={email} />}
         <input type="submit" value={values.submit} />
       </form>
-    </>
+    </Partial>
   );
 }

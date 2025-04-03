@@ -22,7 +22,18 @@ export const handler = async (
   req: Request,
   ctx: FreshContext,
 ): Promise<Response> => {
-  const data = await req.formData();
+  let data: FormData;
+  try {
+    data = await req.formData();
+  } catch (_e) {
+    console.log(`Invalid form data`);
+    return redirectToLocation("/");
+  }
+
+  if (req.method !== "POST") {
+    return new Response("bad", { status: 400 });
+  }
+
   const action = ctx.params.slug;
   const email = data.get("email")?.toString() ?? "nothing";
   const code = data.get("code")?.toString() ?? "nothing";
@@ -36,11 +47,18 @@ export const handler = async (
 
   if (action === "req") {
     if (await requestSesh(email)) {
-      return redirectToLocation("/login", [{
-        k: "email",
-        v: email,
-      }]);
+      const headers = new Headers();
+      headers.set("Content-Type", "application/x-www-form-urlencoded");
+      headers.set("x-sloth-sesh", "req-sesh-enter-code");
+      const options = {
+        headers,
+        method: "POST",
+      };
+      const location = new URL(`/partials/login?email=${email}`, req.url);
+
+      return await fetch(location, options);
     }
+
     return new Response("error", { status: 500 });
   }
 
@@ -288,7 +306,7 @@ function setSeshCookies(
 }
 
 export function redirectToLocation(
-  location = "/login",
+  location = "/",
   queryParams: { k: string; v: string }[] = [],
 ): Response {
   const q = new URLSearchParams();
@@ -303,7 +321,7 @@ export function redirectToLocation(
 }
 
 export function redirectAndDeleteSesh(
-  location = "/login",
+  location = "/",
 ): Response {
   const headers = new Headers();
   headers.set("Location", location);

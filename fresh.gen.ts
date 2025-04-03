@@ -4,11 +4,12 @@
 
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
+import * as $api_entries_slug_add from "./routes/api/entries/[slug]/add.ts";
 import * as $api_joke from "./routes/api/joke.ts";
 import * as $api_sesh_slug_auth from "./routes/api/sesh/[slug]/auth.ts";
 import * as $greet_name_ from "./routes/greet/[name].tsx";
 import * as $index from "./routes/index.tsx";
-import * as $login_index from "./routes/login/index.tsx";
+import * as $partials_login from "./routes/partials/login.tsx";
 import * as $Counter from "./islands/Counter.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
@@ -16,11 +17,12 @@ const manifest = {
   routes: {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
+    "./routes/api/entries/[slug]/add.ts": $api_entries_slug_add,
     "./routes/api/joke.ts": $api_joke,
     "./routes/api/sesh/[slug]/auth.ts": $api_sesh_slug_auth,
     "./routes/greet/[name].tsx": $greet_name_,
     "./routes/index.tsx": $index,
-    "./routes/login/index.tsx": $login_index,
+    "./routes/partials/login.tsx": $partials_login,
   },
   islands: {
     "./islands/Counter.tsx": $Counter,
