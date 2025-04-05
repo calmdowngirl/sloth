@@ -18,26 +18,30 @@ export const handler: Handlers<Data> = {
     const sesh = getCookies(req.headers)["x-sloth-session-token"];
     const refresh = req.headers.get("x-sloth-refresh-token");
 
-    const { result } = await verifySesh(sesh);
-    console.log(`verify sesh result: `, result);
+    if (sesh) {
+      const { result } = await verifySesh(sesh);
+      console.log(`verify sesh result: `, result);
 
-    if (result === 0) {
-      return ctx.render({ isAuthor: true });
-    }
-
-    if (refresh && result === 3) {
-      const { result, payload } = await verifySesh(refresh);
       if (result === 0) {
-        const newSesh = await startSesh(undefined, undefined, +payload!.id!);
-        if (newSesh) {
-          return ctx.render({ isAuthor: true }, {
-            headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
-          });
-        }
+        return ctx.render({ isAuthor: true });
       }
-    }
 
-    console.info(`invalid session`, req.url);
+      if (refresh && result === 3) {
+        const { result, payload } = await verifySesh(refresh);
+        if (result === 0) {
+          const newSesh = await startSesh(undefined, undefined, +payload!.id!);
+          if (newSesh) {
+            return ctx.render({ isAuthor: true }, {
+              headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
+            });
+          }
+
+          console.info(`failed to refresh sesh`, req.url);
+        }
+        console.info(`invalid session`, req.url);
+      }
+      console.info(`invalid session`, req.url);
+    }
 
     return ctx.render({ isAuthor: false }, {
       headers: getDeleteSeshCookiesHeaders(),
@@ -58,7 +62,7 @@ export default function Home({ data }: PageProps<Data>) {
             alt="the Fresh logo: a sliced lemon dripping with juice"
           />
           <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
-          <p class="my-4">
+          <div class="my-4">
             <Partial name={data.isAuthor ? "action-author" : "action-login"}>
               {data.isAuthor
                 ? (
@@ -82,7 +86,7 @@ export default function Home({ data }: PageProps<Data>) {
                   </form>
                 )}
             </Partial>
-          </p>
+          </div>
         </div>
       </div>
 
