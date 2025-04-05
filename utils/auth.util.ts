@@ -77,12 +77,18 @@ export async function startSesh(
 
   const db = await Deno.openKv();
   let value;
-  if (!email) {
-    value = await getAccountById(db, id!);
-    email = value?.email;
-  } else {
-    value = await getAccountByEmail(db, email);
-    id = value?.id;
+  try {
+    if (!email) {
+      value = await getAccountById(db, id!);
+      email = value?.email;
+    } else {
+      value = await getAccountByEmail(db, email);
+      id = value?.id;
+    }
+  } catch (e) {
+    console.log(`error: `, e);
+    db.close();
+    return null;
   }
 
   if (
@@ -113,9 +119,11 @@ export async function startSesh(
       }: `,
       JSON.stringify(e),
     );
+    db.close();
     return null;
   }
 
+  db.close();
   return { sessionToken: sessionJwt, refreshToken: refreshJwt };
 }
 
@@ -144,8 +152,15 @@ export async function verifySesh(token: string): Promise<VerifyJwtResult> {
   }
 
   const db = await Deno.openKv();
-  const account = await getAccountById(db, +payload.id) ??
-    {} as Account;
+  let account: Account;
+  try {
+    account = await getAccountById(db, +payload.id) ??
+      {} as Account;
+  } catch (e) {
+    console.log(`error: `, e);
+    db.close();
+    return { result: 4 };
+  }
 
   if (!!payload.sessionToken && payload.sessionToken !== account.sessionToken) {
     console.error(`bad session token payload`, account, payload);
