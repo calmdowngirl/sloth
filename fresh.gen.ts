@@ -7,7 +7,7 @@ import * as $_app from "./routes/_app.tsx";
 import * as $api_entries_slug_add from "./routes/api/entries/[slug]/add.ts";
 import * as $api_sesh_slug_auth from "./routes/api/sesh/[slug]/auth.ts";
 import * as $index from "./routes/index.tsx";
-import * as $partials_login from "./routes/partials/login.tsx";
+import * as $login from "./routes/login.tsx";
 
 import type { Manifest } from "$fresh/server.ts";
 
@@ -18,7 +18,7 @@ const manifest = {
     "./routes/api/entries/[slug]/add.ts": $api_entries_slug_add,
     "./routes/api/sesh/[slug]/auth.ts": $api_sesh_slug_auth,
     "./routes/index.tsx": $index,
-    "./routes/partials/login.tsx": $partials_login,
+    "./routes/login.tsx": $login,
   },
   islands: {},
   baseUrl: import.meta.url,

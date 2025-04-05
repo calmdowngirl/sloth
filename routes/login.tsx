@@ -5,10 +5,10 @@ import {
   redirectToLocation,
   requestSesh,
   startSesh,
-} from "/routes/api/sesh/[slug]/auth.ts";
-import { verifyJwt } from "/utils/jwt.ts";
+} from "/utils/auth.util.ts";
+import { verifyJwt } from "/utils/jwt.util.ts";
 import { Partial } from "$fresh/runtime.ts";
-import { isLocalhost } from "/utils/helper.ts";
+import { isLocalhost } from "/utils/helper.util.ts";
 
 type Data = {
   inputName: "code" | "email";

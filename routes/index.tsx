@@ -1,7 +1,13 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
-import { redirectAndDeleteSesh } from "/routes/api/sesh/[slug]/auth.ts";
+import {
+  getDeleteSeshCookiesHeaders,
+  getSeshCookiesHeaders,
+  startSesh,
+  verifySesh,
+} from "/utils/auth.util.ts";
 import { Partial } from "$fresh/runtime.ts";
+import { isLocalhost } from "/utils/helper.util.ts";
 
 type Data = {
   isAuthor: boolean;
@@ -9,31 +15,33 @@ type Data = {
 
 export const handler: Handlers<Data> = {
   async GET(req, ctx) {
-    const cookies = getCookies(req.headers);
-    if (cookies["x-sloth-session-token"]) {
-      const options: RequestInit = {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          ...cookies,
-        },
-      };
-      const url = new URL("./api/sesh/verify/auth", req.url);
-      const result = await fetch(url, options);
-      console.log(`verify sesh result: `, result);
+    const sesh = getCookies(req.headers)["x-sloth-session-token"];
+    const refresh = req.headers.get("x-sloth-refresh-token");
 
-      if (result.redirected) {
-        return redirectAndDeleteSesh();
-      }
+    const { result } = await verifySesh(sesh);
+    console.log(`verify sesh result: `, result);
 
-      if (result.status === 200) {
-        return ctx.render({ isAuthor: true });
-      }
-
-      console.info(`invalid session`, req.url);
+    if (result === 0) {
+      return ctx.render({ isAuthor: true });
     }
-    return ctx.render({ isAuthor: false });
+
+    if (refresh && result === 3) {
+      const { result, payload } = await verifySesh(refresh);
+      if (result === 0) {
+        const newSesh = await startSesh(undefined, undefined, +payload!.id!);
+        if (newSesh) {
+          return ctx.render({ isAuthor: true }, {
+            headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
+          });
+        }
+      }
+    }
+
+    console.info(`invalid session`, req.url);
+
+    return ctx.render({ isAuthor: false }, {
+      headers: getDeleteSeshCookiesHeaders(),
+    });
   },
 };
 
@@ -61,8 +69,8 @@ export default function Home({ data }: PageProps<Data>) {
               : (
                 <form
                   method="POST"
-                  f-partial="/partials/login"
-                  action="/partials/login"
+                  f-partial="/login"
+                  action="/login"
                 >
                   <button
                     type="submit"
