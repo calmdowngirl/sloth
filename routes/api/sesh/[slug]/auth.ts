@@ -1,5 +1,5 @@
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
-import { FreshContext } from "$fresh/server.ts";
+import { FreshContext } from "fresh";
 import { isLocalhost } from "/utils/helper.util.ts";
 import {
   redirectAndDeleteSesh,
@@ -12,9 +12,9 @@ import {
 } from "/utils/auth.util.ts";
 
 export const handler = async (
-  req: Request,
   ctx: FreshContext,
 ): Promise<Response> => {
+  const req = ctx.req;
   let data: FormData;
   try {
     data = await req.formData();

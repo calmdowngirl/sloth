@@ -1,4 +1,4 @@
-import { Handlers, PageProps } from "$fresh/server.ts";
+import { FreshContext, PageProps } from "fresh";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import {
   redirectAndSetSeshCookies,
@@ -7,7 +7,7 @@ import {
   startSesh,
 } from "/utils/auth.util.ts";
 import { verifyJwt } from "/utils/jwt.util.ts";
-import { Partial } from "$fresh/runtime.ts";
+import { Partial } from "fresh/runtime";
 import { isLocalhost } from "/utils/helper.util.ts";
 
 type Data = {
@@ -16,13 +16,16 @@ type Data = {
   email?: string;
 };
 
-export const handler: Handlers<Data> = {
-  GET(req, _ctx) {
+export const handler = {
+  GET(ctx: FreshContext) {
+    const req = ctx.req;
+
     console.info(`Invalid request`, req);
     return redirectToLocation("/");
   },
 
-  async POST(req, ctx) {
+  async POST(ctx: FreshContext) {
+    const req = ctx.req;
     const sesh = getCookies(req.headers)["x-sloth-session-token"];
     if (sesh) {
       const pl = await verifyJwt(sesh);
@@ -59,11 +62,11 @@ export const handler: Handlers<Data> = {
       if (sesh) return redirectAndSetSeshCookies(sesh, isLocalhost(req));
     }
 
-    return ctx.render({ inputName, email, errMsg });
+    return ctx.render(LoginPage({ inputName, email, errMsg }));
   },
 };
 
-export default function LoginPage({ data }: PageProps<Data>) {
+export default function LoginPage(data: Data) {
   const { inputName, email, errMsg } = data;
   const values = inputName === "code"
     ? {

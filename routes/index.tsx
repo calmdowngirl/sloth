@@ -1,4 +1,4 @@
-import { Handlers, PageProps } from "$fresh/server.ts";
+import { FreshContext } from "fresh";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import {
   getDeleteSeshCookiesHeaders,
@@ -6,46 +6,53 @@ import {
   startSesh,
   verifySesh,
 } from "/utils/auth.util.ts";
-import { Partial } from "$fresh/runtime.ts";
+import { Partial } from "fresh/runtime";
 import { isLocalhost } from "/utils/helper.util.ts";
 
 type Data = {
   isAuthor: boolean;
 };
 
-export const handler: Handlers<Data> = {
-  async GET(req, ctx) {
+export const handler = {
+  async GET(ctx: FreshContext) {
+    const req = ctx.req;
     const sesh = getCookies(req.headers)["x-sloth-session-token"];
     const refresh = req.headers.get("x-sloth-refresh-token");
 
-    const { result } = await verifySesh(sesh);
-    console.log(`verify sesh result: `, result);
+    if (sesh) {
+      const { result } = await verifySesh(sesh);
+      console.log(`verify sesh result: `, result);
 
-    if (result === 0) {
-      return ctx.render({ isAuthor: true });
-    }
-
-    if (refresh && result === 3) {
-      const { result, payload } = await verifySesh(refresh);
       if (result === 0) {
-        const newSesh = await startSesh(undefined, undefined, +payload!.id!);
-        if (newSesh) {
-          return ctx.render({ isAuthor: true }, {
-            headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
-          });
-        }
+        return ctx.render(Home({ isAuthor: true }));
       }
+
+      if (refresh && result === 3) {
+        const { result, payload } = await verifySesh(refresh);
+        if (result === 0) {
+          const newSesh = await startSesh(undefined, undefined, +payload!.id!);
+          if (newSesh) {
+            return ctx.render(Home({ isAuthor: true }), {
+              headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
+            });
+          }
+
+          console.info(`refresh sesh failed`);
+        }
+
+        console.info(`invalid session`);
+      }
+
+      console.info(`invalid session`);
     }
 
-    console.info(`invalid session`, req.url);
-
-    return ctx.render({ isAuthor: false }, {
+    return ctx.render(Home({ isAuthor: false }), {
       headers: getDeleteSeshCookiesHeaders(),
     });
   },
 };
 
-export default function Home({ data }: PageProps<Data>) {
+export default function Home(data: Data) {
   return (
     <>
       <div class="px-4 py-8 mx-auto bg-[#86efac]">
@@ -58,7 +65,7 @@ export default function Home({ data }: PageProps<Data>) {
             alt="the Fresh logo: a sliced lemon dripping with juice"
           />
           <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
-          <p class="my-4">
+          <div class="my-4">
             <Partial name={data.isAuthor ? "action-author" : "action-login"}>
               {data.isAuthor
                 ? (
@@ -82,7 +89,7 @@ export default function Home({ data }: PageProps<Data>) {
                   </form>
                 )}
             </Partial>
-          </p>
+          </div>
         </div>
       </div>
 

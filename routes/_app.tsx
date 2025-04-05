@@ -1,5 +1,5 @@
-import { type PageProps } from "$fresh/server.ts";
-import { Partial } from "$fresh/runtime.ts";
+import { type PageProps } from "fresh";
+import { Partial } from "fresh/runtime";
 
 export default function App({ Component }: PageProps) {
   return (
