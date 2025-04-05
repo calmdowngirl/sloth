@@ -47,42 +47,48 @@ export const handler: Handlers<Data> = {
 
 export default function Home({ data }: PageProps<Data>) {
   return (
-    <div class="px-4 py-8 mx-auto bg-[#86efac]">
-      <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
-        <img
-          class="my-6"
-          src="/logo.svg"
-          width="128"
-          height="128"
-          alt="the Fresh logo: a sliced lemon dripping with juice"
-        />
-        <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
-        <div class="my-4">
-          <Partial name={data.isAuthor ? "action-author" : "action-login"}>
-            {data.isAuthor
-              ? (
-                <span>
-                  <a class="underline" href="/add/log">log smtg</a> or{" "}
-                  <a class="underline" href="/add/say">say smtg</a>
-                </span>
-              )
-              : (
-                <form
-                  method="POST"
-                  f-partial="/login"
-                  action="/login"
-                >
-                  <button
-                    type="submit"
-                    name="login"
+    <>
+      <div class="px-4 py-8 mx-auto bg-[#86efac]">
+        <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
+          <img
+            class="my-6"
+            src="/logo.svg"
+            width="128"
+            height="128"
+            alt="the Fresh logo: a sliced lemon dripping with juice"
+          />
+          <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
+          <p class="my-4">
+            <Partial name={data.isAuthor ? "action-author" : "action-login"}>
+              {data.isAuthor
+                ? (
+                  <span>
+                    <a class="underline" href="/add/log">log smtg</a> or{" "}
+                    <a class="underline" href="/add/say">say smtg</a>
+                  </span>
+                )
+                : (
+                  <form
+                    method="POST"
+                    f-partial="/login"
+                    action="/login"
                   >
-                    Login
-                  </button>
-                </form>
-              )}
-          </Partial>
+                    <button
+                      type="submit"
+                      name="login"
+                    >
+                      Login
+                    </button>
+                  </form>
+                )}
+            </Partial>
+          </p>
         </div>
       </div>
-    </div>
+
+      <div class="px-4 py-8 mx-auto bg-[#fff]">
+        {/* <div>todo</div> */}
+      </div>
+    </>
   );
 }
