@@ -5,6 +5,11 @@ export async function emailCode(
   event: string,
   code: string,
 ): Promise<boolean> {
+  if (!/^\S+@\S+\.\S+$/.test(to)) {
+    console.error(`invalid email`);
+    return false;
+  }
+
   const { EMAIL_API, EMAIL_SUBJECT_L, EMAIL_TEXT_L, EVENT_TYPE_0 } = Deno.env
     .toObject();
 
