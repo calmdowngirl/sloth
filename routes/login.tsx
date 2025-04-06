@@ -42,13 +42,16 @@ export const handler: Handlers<Data> = {
     if (!code && email) {
       if (!/^\S+@\S+\.\S+$/.test(email)) {
         errMsg = "invalid email";
+        return ctx.render({ inputName, errMsg });
       }
 
-      if (await requestSesh(email)) {
-        inputName = "code";
-      } else {
+      requestSesh(email).catch((e) => {
+        inputName = "email";
         errMsg = `failed sending email to ${email}`;
-      }
+        console.log(`${errMsg}: `, e);
+      });
+
+      return ctx.render({ inputName: "code", email, errMsg });
     }
 
     if (code && email) {
@@ -65,34 +68,74 @@ export const handler: Handlers<Data> = {
 
 export default function LoginPage({ data }: PageProps<Data>) {
   const { inputName, email, errMsg } = data;
-  const values = inputName === "code"
-    ? {
-      inputName,
-      placeholder: "Code",
-      submit: "Submit",
-    }
-    : {
-      inputName,
-      placeholder: "Email adress",
-      submit: "Login",
-    };
 
   return (
     <Partial name="action-login">
-      {errMsg && <div>{errMsg}</div>}
-      <form method="POST">
-        <input
-          type="text"
-          name={values.inputName}
-          placeholder={values.placeholder}
-          defaultValue=""
-          required
-        />
-        {inputName === "code" && (
-          <input type="hidden" name="email" value={email} />
+      {inputName === "code"
+        ? (
+          <>
+            <div class="max-w-72 mb-2">
+              <p>
+                a code has been sent to{" "}
+                {email}, if u have trouble receiving the code
+              </p>
+              <form
+                method="POST"
+                f-partial="/login"
+                action="/login"
+              >
+                <button
+                  class="underline text-blue-500"
+                  type="submit"
+                  name="login"
+                >
+                  click here to try again
+                </button>
+              </form>
+            </div>
+            <form method="POST" autocomplete="off" id="code-form" class="mt-2">
+              <input
+                class="focus:outline-1 focus:outline-yellow-300"
+                type="text"
+                id="enter-code"
+                name="code"
+                placeholder=" enter code"
+                autocomplete="off"
+                autoFocus
+                defaultValue=""
+                required
+              />
+              <input type="hidden" name="email" value={email} />
+              <input
+                type="submit"
+                value="submit"
+                class="px-3 cursor-pointer rounded-sm focus:outline-1 focus:outline-yellow-300"
+              />
+            </form>
+          </>
+        )
+        : (
+          <form method="POST" autocomplete="off" id="email-form" class="mt-2">
+            <input
+              class="focus:outline-1 focus:outline-yellow-300"
+              type="email"
+              id="email-address"
+              name="email"
+              placeholder=" enter email"
+              autocomplete="off"
+              autoFocus
+              defaultValue=""
+              required
+            />
+            <input
+              type="submit"
+              value="send code"
+              class="px-3 bg-yellow-300 cursor-pointer rounded-sm hover:bg-lime-200"
+            />
+          </form>
         )}
-        <input type="submit" value={values.submit} />
-      </form>
+
+      {errMsg && <div class="text-red-600">{errMsg}</div>}
     </Partial>
   );
 }

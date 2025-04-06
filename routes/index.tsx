@@ -22,25 +22,23 @@ export const handler: Handlers<Data> = {
       const { result } = await verifySesh(sesh);
       console.log(`verify sesh result: `, result);
 
-      if (result === 0) {
-        return ctx.render({ isAuthor: true });
-      }
+      if (result === 0) return ctx.render({ isAuthor: true });
 
       if (refresh && result === 3) {
         const { result, payload } = await verifySesh(refresh);
         if (result === 0) {
           const newSesh = await startSesh(undefined, undefined, +payload!.id!);
           if (newSesh) {
+            console.log(`session refreshed`);
             return ctx.render({ isAuthor: true }, {
               headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
             });
           }
 
-          console.info(`failed to refresh sesh`, req.url);
+          console.info(`refresh sesh failed`);
         }
-        console.info(`invalid session`, req.url);
       }
-      console.info(`invalid session`, req.url);
+      console.info(`invalid session`);
     }
 
     return ctx.render({ isAuthor: false }, {
@@ -56,12 +54,12 @@ export default function Home({ data }: PageProps<Data>) {
         <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
           <img
             class="my-6"
-            src="/logo.svg"
+            src="/sloth_512_0.png"
             width="128"
             height="128"
             alt="the Fresh logo: a sliced lemon dripping with juice"
           />
-          <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
+          <h1 class="text-4xl font-bold">welcome ᥫ᭡ slo~life ᥫ᭡</h1>
           <div class="my-4">
             <Partial name={data.isAuthor ? "action-author" : "action-login"}>
               {data.isAuthor
@@ -73,11 +71,13 @@ export default function Home({ data }: PageProps<Data>) {
                 )
                 : (
                   <form
+                    class="mt-2"
                     method="POST"
                     f-partial="/login"
                     action="/login"
                   >
                     <button
+                      class="px-3 bg-lime-300 cursor-pointer rounded-lg border border-lime-500 hover:bg-yellow-300"
                       type="submit"
                       name="login"
                     >
