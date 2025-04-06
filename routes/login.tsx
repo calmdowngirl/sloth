@@ -1,4 +1,4 @@
-import { FreshContext, PageProps } from "fresh";
+import { FreshContext } from "fresh";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import {
   redirectAndSetSeshCookies,
@@ -70,12 +70,10 @@ export default function LoginPage(data: Data) {
   const { inputName, email, errMsg } = data;
   const values = inputName === "code"
     ? {
-      inputName,
       placeholder: "Code",
       submit: "Submit",
     }
     : {
-      inputName,
       placeholder: "Email adress",
       submit: "Login",
     };
@@ -83,11 +81,14 @@ export default function LoginPage(data: Data) {
   return (
     <Partial name="action-login">
       {errMsg && <div>{errMsg}</div>}
-      <form method="POST">
+      <form method="POST" autocomplete="off">
         <input
           type="text"
-          name={values.inputName}
+          id={inputName}
+          name={inputName}
           placeholder={values.placeholder}
+          autocomplete="off"
+          autoFocus
           defaultValue=""
           required
         />

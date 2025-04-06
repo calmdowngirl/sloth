@@ -1,40 +1,38 @@
-import { FreshContext } from "fresh";
+import { define } from "/utils.ts";
+import { FreshContext, page } from "fresh";
 import { getCookies } from "https://deno.land/std@0.224.0/http/cookie.ts";
 import {
   getDeleteSeshCookiesHeaders,
-  getSeshCookiesHeaders,
   startSesh,
   verifySesh,
 } from "/utils/auth.util.ts";
 import { Partial } from "fresh/runtime";
-import { isLocalhost } from "/utils/helper.util.ts";
 
 type Data = {
   isAuthor: boolean;
 };
 
-export const handler = {
+export const handler = define.handlers<Data>({
   async GET(ctx: FreshContext) {
     const req = ctx.req;
     const sesh = getCookies(req.headers)["x-sloth-session-token"];
     const refresh = req.headers.get("x-sloth-refresh-token");
 
+    let isAuthor = false;
+
     if (sesh) {
       const { result } = await verifySesh(sesh);
       console.log(`verify sesh result: `, result);
 
-      if (result === 0) {
-        return ctx.render(Home({ isAuthor: true }));
-      }
+      if (result === 0) isAuthor = true;
 
       if (refresh && result === 3) {
         const { result, payload } = await verifySesh(refresh);
         if (result === 0) {
           const newSesh = await startSesh(undefined, undefined, +payload!.id!);
           if (newSesh) {
-            return ctx.render(Home({ isAuthor: true }), {
-              headers: getSeshCookiesHeaders(newSesh, isLocalhost(req)),
-            });
+            console.log(`session refreshed`);
+            isAuthor = true;
           }
 
           console.info(`refresh sesh failed`);
@@ -46,16 +44,18 @@ export const handler = {
       console.info(`invalid session`);
     }
 
-    return ctx.render(Home({ isAuthor: false }), {
+    if (isAuthor) return page({ isAuthor: true });
+
+    return page({ isAuthor: false }, {
       headers: getDeleteSeshCookiesHeaders(),
     });
   },
-};
+});
 
-export default function Home(data: Data) {
+export default define.page<typeof handler>(({ data }) => {
   return (
     <>
-      <div class="px-4 py-8 mx-auto bg-[#86efac]">
+      <div class="px-4 py-8 mx-auto fresh-gradient">
         <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
           <img
             class="my-6"
@@ -70,8 +70,13 @@ export default function Home(data: Data) {
               {data.isAuthor
                 ? (
                   <span>
-                    <a class="underline" href="/add/log">log smtg</a> or{" "}
-                    <a class="underline" href="/add/say">say smtg</a>
+                    <a
+                      class="text-black underline visited:text-black g-blue-500 active:bg-blue-600"
+                      href="/add/log"
+                    >
+                      log smtg
+                    </a>{" "}
+                    or <a class="underline" href="/add/say">say smtg</a>
                   </span>
                 )
                 : (
@@ -98,4 +103,4 @@ export default function Home(data: Data) {
       </div>
     </>
   );
-}
+});

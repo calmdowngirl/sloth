@@ -1,4 +1,4 @@
-import { type PageProps } from "fresh";
+import type { PageProps } from "fresh";
 import { Partial } from "fresh/runtime";
 
 export default function App({ Component }: PageProps) {

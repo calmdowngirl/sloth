@@ -1,17 +1,22 @@
-// main.ts
 import { App, fsRoutes, staticFiles } from "fresh";
+import { define, type State } from "./utils.ts";
 
-export const app = new App()
-  // Add static file serving middleware
-  .use(staticFiles());
+export const app = new App<State>({ root: "./" });
+app.use(staticFiles());
 
-// Enable file-system based routing
+// this can also be defined via a file. feel free to delete this!
+const exampleLoggerMiddleware = define.middleware((ctx) => {
+  console.log(`${ctx.req.method} ${ctx.req.url}`);
+  return ctx.next();
+});
+app.use(exampleLoggerMiddleware);
+
 await fsRoutes(app, {
+  dir: "./",
   loadIsland: (path) => import(`./islands/${path}`),
   loadRoute: (path) => import(`./routes/${path}`),
 });
 
-// If this module is called directly, start the server
 if (import.meta.main) {
   await app.listen();
 }
